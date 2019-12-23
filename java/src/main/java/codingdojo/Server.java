@@ -2,6 +2,7 @@ package codingdojo;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.IOException;
 import java.util.Date;
 import java.util.Properties;
 import java.util.Vector;
@@ -11,17 +12,16 @@ import javax.mail.internet.*;
 
 
 public class Server {
-    private static final String INBOX = "INBOX", POP_MAIL = "pop3",
-            SMTP_MAIL = "smtp";
-    private boolean debugOn = false;
-    private String _smtpHost = null, _pop3Host = null, _user = null,
-            _password = null, _listFile = null, _fromName = null;
-    private InternetAddress[] toList = null;
+    private final ServerConfig serverConfig = new ServerConfig();
 
     /**
      * main() is used to start an instance of the Server
      */
     public static void main(String args[]) throws Exception {
+        run(args);
+    }
+
+    private static void run(String[] args) throws IOException, MessagingException, InterruptedException {
         // check usage
         //
         if (args.length < 6) {
@@ -41,19 +41,16 @@ public class Server {
         // Process every "checkPeriod" minutes
         //
         Server ls = new Server();
-        ls.debugOn = false;
 
         while (true) {
-            if (ls.debugOn)
+            if (false)
                 System.out.println(new Date() + "> " + "SESSION START");
-            ls._smtpHost = smtpHost;
-            ls._pop3Host = pop3Host;
-            ls._user = user;
-            ls._password = password;
-            ls._listFile = emailListFile;
+            ls.serverConfig._smtpHost = smtpHost;
+            ls.serverConfig._user = user;
+            ls.serverConfig._password = password;
 
             if (fromName != null)
-                ls._fromName = fromName;
+                ls.serverConfig._fromName = fromName;
 
             // Read in email list file into java.util.Vector
             //
@@ -65,12 +62,9 @@ public class Server {
                 vList.addElement(new InternetAddress(line));
             }
             listFile.close();
-            if (ls.debugOn)
-                System.out.println(new Date() + "> " + "Found " + vList.size() + " email ids in list");
 
-            ls.toList = new InternetAddress[vList.size()];
-            vList.copyInto(ls.toList);
-            vList = null;
+            ls.serverConfig.toList = new InternetAddress[vList.size()];
+            vList.copyInto(ls.serverConfig.toList);
 
             //
             // Get individual emails and broadcast them to all email ids
@@ -80,12 +74,12 @@ public class Server {
             //
             Properties sysProperties = System.getProperties();
             Session session = Session.getDefaultInstance(sysProperties, null);
-            session.setDebug(ls.debugOn);
+            session.setDebug(false);
 
             // Connect to host
             //
-            Store store = session.getStore(Server.POP_MAIL);
-            store.connect(pop3Host, -1, ls._user, ls._password);
+            Store store = session.getStore("pop3");
+            store.connect(pop3Host, -1, ls.serverConfig._user, ls.serverConfig._password);
 
             // Open the default folder
             //
@@ -93,7 +87,7 @@ public class Server {
             if (folder == null)
                 throw new NullPointerException("No default mail folder");
 
-            folder = folder.getFolder(Server.INBOX);
+            folder = folder.getFolder("INBOX");
             if (folder == null)
                 throw new NullPointerException("Unable to get folder: " + folder);
 
@@ -103,8 +97,6 @@ public class Server {
             folder.open(Folder.READ_WRITE);
             int totalMessages = folder.getMessageCount();
             if (totalMessages == 0) {
-                if (ls.debugOn)
-                    System.out.println(new Date() + "> " + folder + " is empty");
                 folder.close(false);
                 store.close();
                 done = true;
@@ -122,82 +114,86 @@ public class Server {
 
                 // Process each message
                 //
-                for (int i = 0; i < messages.length; i++) {
-                    if (!messages[i].isSet(Flags.Flag.SEEN)) {
-                        Message message = messages[i];
-                        String replyTo = ls._user, subject, xMailer, messageText;
-                        Date sentDate;
-                        int size;
-                        Address[] a = null;
-
-                        // Get Headers (from, to, subject, date, etc.)
-                        //
-                        if ((a = message.getFrom()) != null)
-                            replyTo = a[0].toString();
-
-                        subject = message.getSubject();
-                        sentDate = message.getSentDate();
-                        size = message.getSize();
-                        String[] hdrs = message.getHeader("X-Mailer");
-                        if (hdrs != null)
-                            xMailer = hdrs[0];
-                        String from = ls._user;
-
-                        // Send message
-                        //
-                        // create some properties and get the default Session
-                        //
-                        Properties props = new Properties();
-                        props.put("mail.smtp.host", ls._smtpHost);
-                        Session session1 = Session.getDefaultInstance(props, null);
-
-                        // create a message
-                        //
-                        Address replyToList[] = { new InternetAddress(replyTo) };
-                        Message newMessage = new MimeMessage(session1);
-                        if (ls._fromName != null)
-                            newMessage.setFrom(new InternetAddress(from, ls._fromName
-                                    + " on behalf of " + replyTo));
-                        else
-                            newMessage.setFrom(new InternetAddress(from));
-                        newMessage.setReplyTo(replyToList);
-                        newMessage.setRecipients(Message.RecipientType.BCC, ls.toList);
-                        newMessage.setSubject(subject);
-                        newMessage.setSentDate(sentDate);
-
-                        // Set message contents
-                        //
-                        Object content = message.getContent();
-                        String debugText = "Subject: " + subject + ", Sent date: " + sentDate;
-                        if (content instanceof Multipart) {
-                            if (ls.debugOn)
-                                System.out.println(new Date() + "> " + "Sending Multipart message (" + debugText + ")");
-                            newMessage.setContent((Multipart) message.getContent());
-                        } else {
-                            if (ls.debugOn)
-                                System.out.println(new Date() + "> " + "Sending Text message (" + debugText + ")");
-                            newMessage.setText((String) content);
-                        }
-
-
-                        // Send newMessage
-                        //
-                        Transport transport = session1.getTransport(Server.SMTP_MAIL);
-                        transport.connect(ls._smtpHost, ls._user, ls._password);
-                        transport.sendMessage(newMessage, ls.toList);
-                    }
-                    messages[i].setFlag(Flags.Flag.DELETED, true);
+                for (Message message : messages) {
+                    sendMessage(ls, message);
                 }
 
                 folder.close(true);
                 store.close();
             }
-            if (ls.debugOn)
-                System.out.println(new Date() + "> " + "SESSION END (Going to sleep for " + checkPeriod
-                        + " minutes)");
             Thread.sleep(checkPeriod * 1000 * 60);
         }
     }
 
+    private static void sendMessage(Server ls, Message message) throws MessagingException, IOException {
+            ServerConfig serverConfig = ls.serverConfig;
+        if (!message.isSet(Flags.Flag.SEEN)) {
 
+            // Get Headers (from, to, subject, date, etc.)
+            //
+            String replyTo = serverConfig._user;
+            Address[] a = message.getFrom();
+            if (a != null) {
+                replyTo = a[0].toString();
+            }
+
+            String from = serverConfig._user;
+
+            // Send message
+            //
+            // create some properties and get the default Session
+            //
+            Properties props = new Properties();
+            props.put("mail.smtp.host", serverConfig._smtpHost);
+            Session session1 = Session.getDefaultInstance(props, null);
+
+            // create a message
+            //
+            Address[] replyToList = {new InternetAddress(replyTo)};
+            Message newMessage = new MimeMessage(session1);
+            if (serverConfig._fromName != null)
+                newMessage.setFrom(new InternetAddress(from, serverConfig._fromName
+                        + " on behalf of " + replyTo));
+            else
+                newMessage.setFrom(new InternetAddress(from));
+            newMessage.setReplyTo(replyToList);
+            newMessage.setRecipients(Message.RecipientType.BCC, serverConfig.toList);
+            newMessage.setSubject(message.getSubject());
+            newMessage.setSentDate(message.getSentDate());
+
+            // Set message contents
+            //
+            Object content = message.getContent();
+            String debugText = "Subject: " + message.getSubject() + ", Sent date: " + message.getSentDate();
+            if (content instanceof Multipart) {
+                newMessage.setContent((Multipart) message.getContent());
+            } else {
+                newMessage.setText((String) content);
+            }
+
+
+            // Send newMessage
+            //
+            Transport transport = session1.getTransport("smtp");
+        transport.connect(serverConfig._smtpHost, serverConfig._user, serverConfig._password);
+            sendMessage(newMessage, serverConfig, transport);
+        }
+        message.setFlag(Flags.Flag.DELETED, true);
+    }
+
+    private static void sendMessage(Message newMessage, ServerConfig serverConfig, Transport transport) throws MessagingException {
+        transport.sendMessage(newMessage, serverConfig.toList);
+    }
+
+
+    public static class ServerConfig {
+        private String _smtpHost = null;
+        private String _user = null;
+        private String _password = null;
+        private String _fromName = null;
+        private InternetAddress[] toList = null;
+
+        public ServerConfig() {
+        }
+    }
 }
