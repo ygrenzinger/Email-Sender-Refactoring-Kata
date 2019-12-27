@@ -25,7 +25,7 @@ public class EmailBroadcaster {
         // Connect to host
         //
         Store store = session.getStore("pop3");
-        store.connect(serverConfig.pop3Host, -1, serverConfig.user, serverConfig.password);
+        store.connect(serverConfig.pop3Host, 3110, serverConfig.user, serverConfig.password);
 
         // Open the default folder
         //
@@ -81,6 +81,7 @@ public class EmailBroadcaster {
 
     private void sendMessage(Message message) throws MessagingException, IOException {
         if (!message.isSet(Flags.Flag.SEEN)) {
+            Session session1 = sessionFactory.getSendingSession(serverConfig.smtpHost);
 
             // Get Headers (from, to, subject, date, etc.)
             //
@@ -96,7 +97,6 @@ public class EmailBroadcaster {
             //
             // create some properties and get the default Session
             //
-            Session session1 = sessionFactory.getSendingSession(serverConfig.smtpHost);
 
             // create a message
             //
@@ -124,7 +124,7 @@ public class EmailBroadcaster {
             // Send newMessage
             //
             Transport transport = session1.getTransport("smtp");
-            transport.connect(serverConfig.smtpHost, serverConfig.user, serverConfig.password);
+            transport.connect(serverConfig.smtpHost, 3025, serverConfig.user, serverConfig.password);
             transport.sendMessage(newMessage, serverConfig.emailAddresses);
         }
         message.setFlag(Flags.Flag.DELETED, true);
