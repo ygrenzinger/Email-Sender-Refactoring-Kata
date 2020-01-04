@@ -1,5 +1,9 @@
 package codingdojo;
 
+import codingdojo.domain.MessageBroadcaster;
+import codingdojo.domain.MailSession;
+import codingdojo.infrastructure.DefaultMailSession;
+import codingdojo.infrastructure.ServerConfig;
 import com.icegreen.greenmail.store.FolderException;
 import com.icegreen.greenmail.store.MailFolder;
 import com.icegreen.greenmail.store.StoredMessage;
@@ -13,7 +17,6 @@ import org.junit.jupiter.api.Test;
 import javax.mail.Message;
 import javax.mail.MessagingException;
 import javax.mail.Session;
-import javax.mail.internet.AddressException;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
 import java.io.IOException;
@@ -23,9 +26,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-class EmailBroadcasterIntegrationTest {
+class MessageBroadcasterIntegrationTest {
 
-    MailSessionFactory mailSessionFactory;
+    MailSession mailSession;
     ServerConfig serverConfig;
 
     GreenMail pop3mail = new GreenMail(ServerSetupTest.POP3);
@@ -33,16 +36,9 @@ class EmailBroadcasterIntegrationTest {
 
 
     @BeforeEach
-    public void beforeEach() throws AddressException {
-        mailSessionFactory = new MailSessionFactory();
-        serverConfig = new ServerConfig(
-                "127.0.0.1",
-                "127.0.0.1",
-                "johndoe",
-                "soooosecret",
-                "john@localhost.com",
-                100,
-                InternetAddress.parse("roger@localhost.com,arnold@localhost.com"));
+    public void beforeEach() {
+        serverConfig = ServerConfigFake.getDefaultServerConfigForTest();
+        mailSession = new DefaultMailSession(serverConfig);
         pop3mail.start();
         smtpMail.start();
 
@@ -54,8 +50,23 @@ class EmailBroadcasterIntegrationTest {
         smtpMail.stop();
     }
 
+
     @Test
-    public void shoudl_send_emails() throws Exception {
+    public void should_do_nothing_if_no_message() throws Exception {
+        pop3mail.setUser(serverConfig.fromName, serverConfig.user, serverConfig.password);
+        smtpMail.setUser(serverConfig.fromName, serverConfig.user, serverConfig.password);
+
+        MessageBroadcaster broadcaster = new MessageBroadcaster(serverConfig, mailSession);
+        broadcaster.processEmails();
+
+        GreenMailUser n = smtpMail.setUser("roger@localhost.com", null);
+        MailFolder inbox = smtpMail.getManagers().getImapHostManager().getInbox(n);
+        List<StoredMessage> messages = inbox.getMessages();
+        assertThat(messages.isEmpty()).isTrue();
+    }
+
+    @Test
+    public void should_broadcast_message_in_INBOX_folder() throws Exception {
         MimeMessage messageToSend = new MimeMessage((Session) null);
         messageToSend.setFrom(new InternetAddress("mike@mail.com"));
         messageToSend.addRecipient(Message.RecipientType.TO, new InternetAddress(
@@ -68,7 +79,7 @@ class EmailBroadcasterIntegrationTest {
 
         smtpMail.setUser(serverConfig.fromName, serverConfig.user, serverConfig.password);
 
-        EmailBroadcaster broadcaster = new EmailBroadcaster(serverConfig, mailSessionFactory);
+        MessageBroadcaster broadcaster = new MessageBroadcaster(serverConfig, mailSession);
         broadcaster.processEmails();
 
         assertTrue(smtpMail.waitForIncomingEmail(
@@ -88,7 +99,7 @@ class EmailBroadcasterIntegrationTest {
             assertThat(messages).hasSize(1);
             MimeMessage expectedMessage = messages.get(0).getMimeMessage();
             assertThat(expectedMessage.getSubject()).isEqualTo("test");
-            assertThat(expectedMessage.getFrom()[0].toString()).isEqualTo("\"john@localhost.com on behalf of mike@mail.com\" <johndoe>");
+            assertThat(expectedMessage.getFrom()[0].toString()).isEqualTo("\"john@localhost.com on behalf of mike@mail.com\" <johndoe@localhost.com>");
             assertThat(expectedMessage.getContent().toString()).contains("long description");
         } else {
             fail("No email for user " + user + " arrived");

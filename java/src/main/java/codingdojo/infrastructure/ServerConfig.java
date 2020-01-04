@@ -1,7 +1,6 @@
-package codingdojo;
+package codingdojo.infrastructure;
 
 import javax.mail.internet.InternetAddress;
-import java.io.IOException;
 
 public class ServerConfig {
     public final String smtpHost;

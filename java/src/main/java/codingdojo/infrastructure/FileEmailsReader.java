@@ -1,4 +1,4 @@
-package codingdojo;
+package codingdojo.infrastructure;
 
 import javax.mail.internet.AddressException;
 import javax.mail.internet.InternetAddress;

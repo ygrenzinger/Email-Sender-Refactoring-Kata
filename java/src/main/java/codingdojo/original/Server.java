@@ -1,4 +1,4 @@
-package codingdojo;
+package codingdojo.original;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -10,7 +10,7 @@ import javax.mail.*;
 import javax.mail.internet.*;
 
 
-public class OriginalServer {
+public class Server {
     private static final String INBOX = "INBOX", POP_MAIL = "pop3",
             SMTP_MAIL = "smtp";
     private boolean debugOn = false;
@@ -40,7 +40,7 @@ public class OriginalServer {
 
         // Process every "checkPeriod" minutes
         //
-        OriginalServer ls = new OriginalServer();
+        Server ls = new Server();
         ls.debugOn = false;
 
         while (true) {
@@ -84,7 +84,7 @@ public class OriginalServer {
 
             // Connect to host
             //
-            Store store = session.getStore(OriginalServer.POP_MAIL);
+            Store store = session.getStore(Server.POP_MAIL);
             store.connect(pop3Host, -1, ls._user, ls._password);
 
             // Open the default folder
@@ -93,7 +93,7 @@ public class OriginalServer {
             if (folder == null)
                 throw new NullPointerException("No default mail folder");
 
-            folder = folder.getFolder(OriginalServer.INBOX);
+            folder = folder.getFolder(Server.INBOX);
             if (folder == null)
                 throw new NullPointerException("Unable to get folder: " + folder);
 
@@ -182,7 +182,7 @@ public class OriginalServer {
 
                         // Send newMessage
                         //
-                        Transport transport = session1.getTransport(OriginalServer.SMTP_MAIL);
+                        Transport transport = session1.getTransport(Server.SMTP_MAIL);
                         transport.connect(ls._smtpHost, ls._user, ls._password);
                         transport.sendMessage(newMessage, ls.toList);
                     }

@@ -1,10 +1,9 @@
-package codingdojo;
+package codingdojo.infrastructure;
 
 import org.junit.jupiter.api.Test;
 
 import javax.mail.internet.AddressException;
 import javax.mail.internet.InternetAddress;
-import java.io.IOException;
 import java.net.URISyntaxException;
 
 import static org.assertj.core.api.Assertions.assertThat;
